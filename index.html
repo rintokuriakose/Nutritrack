@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NutriTrack" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>NutriTrack</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PERSONAL NUTRITION</div>
+        <h1>NutriTrack</h1>
+      </div>
+      <button id="installBtn" class="ghost small-btn" hidden>Install</button>
+    </header>
+
+    <main>
+      <section class="page active" id="page-home">
+        <div class="date-row">
+          <button class="icon-btn" id="prevDay">‹</button>
+          <input type="date" id="selectedDate" />
+          <button class="icon-btn" id="nextDay">›</button>
+        </div>
+
+        <section class="hero-card">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-label="Calories progress">
+              <circle cx="60" cy="60" r="50" class="ring-bg"></circle>
+              <circle cx="60" cy="60" r="50" class="ring-fg" id="calRing"></circle>
+            </svg>
+            <div class="ring-label">
+              <strong id="calRemaining">0</strong>
+              <span>kcal left</span>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <div class="muted">Consumed</div>
+            <div class="big" id="calConsumed">0 kcal</div>
+            <div class="muted" id="calTargetText">of 0 kcal target</div>
+          </div>
+        </section>
+
+        <section class="macro-grid" id="macroGrid"></section>
+
+        <section class="section-card">
+          <div class="section-head"><h2>Meals</h2><button class="link-btn" data-nav="food">+ Add food</button></div>
+          <div id="mealSummary"></div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-head"><h2>Body</h2><button class="link-btn" data-nav="body">Log</button></div>
+          <div id="bodySummary" class="empty-copy">No body measurements yet.</div>
+        </section>
+      </section>
+
+      <section class="page" id="page-food">
+        <div class="page-title-row"><div><div class="eyebrow">FOOD LOG</div><h2>Add food</h2></div></div>
+        <div class="section-card">
+          <div class="field-row two">
+            <label>Date<input id="foodDate" type="date" /></label>
+            <label>Meal<select id="foodMeal"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option></select></label>
+          </div>
+          <label>Search foods<input id="foodSearch" type="search" placeholder="e.g. egg, dosa, chicken, rice" autocomplete="off" /></label>
+          <div class="chips" id="foodFilterChips">
+            <button class="chip active" data-filter="all">All</button><button class="chip" data-filter="indian">Indian/Kerala</button><button class="chip" data-filter="protein">High protein</button><button class="chip" data-filter="recent">Recent</button><button class="chip" data-filter="fav">Favourites</button>
+          </div>
+          <div id="foodResults" class="food-results"></div>
+        </div>
+
+        <section class="section-card">
+          <details>
+            <summary>Manual / custom food</summary>
+            <div class="form-grid compact" style="margin-top:14px">
+              <label>Name<input id="customName" /></label>
+              <label>Serving<input id="customServing" placeholder="e.g. 150 g" /></label>
+              <label>Calories<input id="customCal" type="number" inputmode="decimal" /></label>
+              <label>Protein g<input id="customProtein" type="number" step="0.1" inputmode="decimal" /></label>
+              <label>Carbs g<input id="customCarbs" type="number" step="0.1" inputmode="decimal" /></label>
+              <label>Fat g<input id="customFat" type="number" step="0.1" inputmode="decimal" /></label>
+              <label>Fibre g<input id="customFibre" type="number" step="0.1" inputmode="decimal" /></label>
+              <label>Sugar g<input id="customSugar" type="number" step="0.1" inputmode="decimal" /></label>
+              <label>Sodium mg<input id="customSodium" type="number" step="1" inputmode="decimal" /></label>
+            </div>
+            <button class="primary wide" id="addCustomFood">Add custom food</button>
+          </details>
+        </section>
+
+        <section class="section-card"><div class="section-head"><h2>Logged today</h2><span id="logTotal" class="pill"></span></div><div id="foodLog"></div></section>
+      </section>
+
+      <section class="page" id="page-body">
+        <div class="page-title-row"><div><div class="eyebrow">BODY</div><h2>Measurements</h2></div></div>
+        <section class="section-card">
+          <div class="form-grid">
+            <label>Date<input id="bodyDate" type="date" /></label>
+            <label>Weight kg<input id="bodyWeight" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Body fat %<input id="bodyFat" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Muscle mass kg<input id="bodyMuscle" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Body water %<input id="bodyWater" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Visceral fat<input id="bodyVisceral" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Bone mass kg<input id="bodyBone" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Metabolic age<input id="bodyMetabolicAge" type="number" step="1" inputmode="numeric" /></label>
+            <label>Waist cm<input id="bodyWaist" type="number" step="0.1" inputmode="decimal" /></label>
+            <label>Chest cm<input id="bodyChest" type="number" step="0.1" inputmode="decimal" /></label>
+          </div>
+          <button class="primary wide" id="saveBody">Save measurement</button>
+        </section>
+        <section class="section-card"><h2>History</h2><div id="bodyHistory"></div></section>
+      </section>
+
+      <section class="page" id="page-trends">
+        <div class="page-title-row"><div><div class="eyebrow">ANALYTICS</div><h2>Trends</h2></div><select id="trendRange" class="mini-select"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select></div>
+        <section class="chart-card"><div class="section-head"><h3>Calories</h3><span class="muted" id="avgCalories"></span></div><canvas id="chartCalories" width="760" height="300"></canvas></section>
+        <section class="chart-card"><div class="section-head"><h3>Protein</h3><span class="muted" id="avgProtein"></span></div><canvas id="chartProtein" width="760" height="300"></canvas></section>
+        <section class="chart-card"><div class="section-head"><h3>Weight</h3><span class="muted" id="weightChange"></span></div><canvas id="chartWeight" width="760" height="300"></canvas></section>
+        <section class="chart-card"><div class="section-head"><h3>Body fat</h3><span class="muted" id="fatChange"></span></div><canvas id="chartFat" width="760" height="300"></canvas></section>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="page-title-row"><div><div class="eyebrow">SETTINGS</div><h2>Profile & targets</h2></div></div>
+        <section class="section-card">
+          <p class="muted note">Used only on this device to calculate your daily targets.</p>
+          <div class="form-grid">
+            <label>Name<input id="profileName" placeholder="Me" /></label>
+            <label>Sex<select id="profileSex"><option value="male">Male</option><option value="female">Female</option></select></label>
+            <label>Age<input id="profileAge" type="number" min="14" max="100" /></label>
+            <label>Height cm<input id="profileHeight" type="number" step="0.1" /></label>
+            <label>Current weight kg<input id="profileWeight" type="number" step="0.1" /></label>
+            <label>Activity<select id="profileActivity"><option value="1.2">Sedentary</option><option value="1.375">Lightly active</option><option value="1.55">Moderately active</option><option value="1.725">Very active</option></select></label>
+            <label>Goal<select id="profileGoal"><option value="-500">Lose weight</option><option value="-250">Lose slowly</option><option value="0">Maintain</option><option value="250">Gain slowly</option><option value="400">Gain weight</option></select></label>
+            <label>Protein target g<input id="targetProtein" type="number" /></label>
+            <label>Fibre target g<input id="targetFibre" type="number" /></label>
+          </div>
+          <h3 class="subhead">Meal times</h3>
+          <div class="form-grid">
+            <label>Breakfast<input id="timeBreakfast" type="time" /></label><label>Lunch<input id="timeLunch" type="time" /></label><label>Dinner<input id="timeDinner" type="time" /></label><label>Snack<input id="timeSnack" type="time" /></label>
+          </div>
+          <button class="primary wide" id="saveProfile">Save profile</button>
+        </section>
+        <section class="section-card">
+          <h2>Backup & privacy</h2>
+          <p class="muted note">Your food and body data stay in your browser. Export a backup before changing phones or clearing Safari data.</p>
+          <div class="button-stack"><button class="secondary" id="exportData">Export backup</button><label class="secondary file-label">Import backup<input id="importData" type="file" accept="application/json" hidden /></label><button class="danger" id="eraseData">Erase all data</button></div>
+        </section>
+        <section class="section-card" id="installHelp"><h2>Install on iPhone</h2><p class="muted note">Open this site in Safari → tap Share → Add to Home Screen → Add. NutriTrack will then open like a normal app.</p></section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-nav="home"><span>⌂</span><small>Today</small></button>
+      <button class="nav-item" data-nav="food"><span>＋</span><small>Food</small></button>
+      <button class="nav-item" data-nav="body"><span>⚖</span><small>Body</small></button>
+      <button class="nav-item" data-nav="trends"><span>⌁</span><small>Trends</small></button>
+      <button class="nav-item" data-nav="settings"><span>⚙</span><small>Settings</small></button>
+    </nav>
+  </div>
+
+  <dialog id="foodDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" value="cancel">×</button>
+      <h3 id="dialogFoodName"></h3><p class="muted" id="dialogBaseServing"></p>
+      <label>Quantity multiplier<input id="dialogQty" type="number" value="1" min="0.1" step="0.1" inputmode="decimal" /></label>
+      <div id="dialogNutrition" class="nutrition-preview"></div>
+      <div class="dialog-actions"><button type="button" class="secondary" id="toggleFav">♡ Favourite</button><button type="button" class="primary" id="confirmFood">Add food</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
