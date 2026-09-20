@@ -10,6 +10,19 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .bottom-nav{grid-template-columns:repeat(6,1fr)}
+    .plan-summary-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+    .plan-metric{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:12px}
+    .plan-metric span{display:block;font-size:11px;color:#64748b;margin-bottom:4px}
+    .plan-metric strong{display:block;font-size:20px}
+    .plan-status{margin-top:12px;padding:12px 14px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;font-size:13px;line-height:1.45}
+    .plan-status.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+    .plan-status.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+    .plan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .plan-home-note{margin:-4px 0 14px;padding:10px 12px;border-radius:14px;background:#ecfeff;border:1px solid #cffafe;font-size:12px;color:#155e75}
+    @media(max-width:520px){.plan-summary-grid{grid-template-columns:1fr 1fr}.bottom-nav .nav-item small{font-size:9px}}
+  </style>
   <title>NutriTrack</title>
 </head>
 <body>
@@ -107,6 +120,39 @@
         </section>
         <section class="section-card"><h2>History</h2><div id="bodyHistory"></div></section>
       </section>
+      <section class="page" id="page-plan">
+        <div class="page-title-row"><div><div class="eyebrow">WEIGHT LOSS PLAN</div><h2>Goal & calorie plan</h2></div><span id="planActivePill" class="pill">Not set</span></div>
+        <section class="section-card">
+          <p class="muted note">Set the weight you want to reach and your target date. NutriTrack will calculate an estimated calorie deficit and update protein, carbs, fat and fibre targets. If the requested pace is too aggressive, the app will cap the deficit instead of forcing an extreme calorie target.</p>
+          <div class="form-grid" style="margin-top:14px">
+            <label>Current weight kg<input id="planCurrentWeight" type="number" min="35" max="350" step="0.1" inputmode="decimal" /></label>
+            <label>Target weight kg<input id="planTargetWeight" type="number" min="35" max="300" step="0.1" inputmode="decimal" /></label>
+            <label>Target date<input id="planTargetDate" type="date" /></label>
+            <label>Weeks available<input id="planWeeks" type="text" readonly /></label>
+          </div>
+          <div class="plan-actions">
+            <button class="primary" id="saveWeightPlan">Save plan</button>
+            <button class="secondary" id="disableWeightPlan">Use manual target</button>
+          </div>
+          <div id="planValidation" class="plan-status" style="display:none"></div>
+        </section>
+        <section class="section-card">
+          <div class="section-head"><h2>Your daily plan</h2><span id="planPace" class="pill"></span></div>
+          <div class="plan-summary-grid">
+            <div class="plan-metric"><span>Calorie target</span><strong id="planCalories">—</strong></div>
+            <div class="plan-metric"><span>Estimated maintenance</span><strong id="planMaintenance">—</strong></div>
+            <div class="plan-metric"><span>Protein</span><strong id="planProtein">—</strong></div>
+            <div class="plan-metric"><span>Carbs</span><strong id="planCarbs">—</strong></div>
+            <div class="plan-metric"><span>Fat</span><strong id="planFat">—</strong></div>
+            <div class="plan-metric"><span>Fibre</span><strong id="planFibre">—</strong></div>
+          </div>
+          <div id="planExplanation" class="plan-status"></div>
+        </section>
+        <section class="section-card">
+          <h2>How this target is calculated</h2>
+          <p class="muted note" style="margin-top:8px">NutriTrack estimates maintenance calories from your profile, then works out the average deficit needed to move from your current weight to your target weight by the selected date. The planner limits the deficit to about 1,000 kcal/day and keeps a calorie floor. Weight loss is not perfectly linear, so treat the result as a starting target and adjust using your real trend over several weeks.</p>
+        </section>
+      </section>
       <section class="page" id="page-trends">
         <div class="page-title-row"><div><div class="eyebrow">ANALYTICS</div><h2>Trends</h2></div><select id="trendRange" class="mini-select"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select></div>
         <section class="chart-card"><div class="section-head"><h3>Calories</h3><span class="muted" id="avgCalories"></span></div><canvas id="chartCalories" width="760" height="300"></canvas></section>
@@ -125,7 +171,7 @@
             <label>Height cm<input id="profileHeight" type="number" step="0.1" /></label>
             <label>Current weight kg<input id="profileWeight" type="number" step="0.1" /></label>
             <label>Activity<select id="profileActivity"><option value="1.2">Sedentary</option><option value="1.375">Lightly active</option><option value="1.55">Moderately active</option><option value="1.725">Very active</option></select></label>
-            <label>Goal<select id="profileGoal"><option value="-500">Lose weight</option><option value="-250">Lose slowly</option><option value="0">Maintain</option><option value="250">Gain slowly</option><option value="400">Gain weight</option></select></label>
+            <label>Manual goal (when Plan is off)<select id="profileGoal"><option value="-500">Lose weight</option><option value="-250">Lose slowly</option><option value="0">Maintain</option><option value="250">Gain slowly</option><option value="400">Gain weight</option></select></label>
             <label>Protein target g<input id="targetProtein" type="number" /></label>
             <label>Fibre target g<input id="targetFibre" type="number" /></label>
           </div>
@@ -147,6 +193,7 @@
       <button class="nav-item active" data-nav="home"><span>⌂</span><small>Today</small></button>
       <button class="nav-item" data-nav="food"><span>＋</span><small>Food</small></button>
       <button class="nav-item" data-nav="body"><span>⚖</span><small>Body</small></button>
+      <button class="nav-item" data-nav="plan"><span>◎</span><small>Plan</small></button>
       <button class="nav-item" data-nav="trends"><span>⌁</span><small>Trends</small></button>
       <button class="nav-item" data-nav="settings"><span>⚙</span><small>Settings</small></button>
     </nav>
@@ -163,5 +210,6 @@
   <div class="toast" id="toast"></div>
   <script src="app.js"></script>
   <script src="online-food-search.js"></script>
+  <script src="weight-plan.js"></script>
 </body>
 </html>
