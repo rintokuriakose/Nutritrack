@@ -21,7 +21,6 @@
       </div>
       <button id="installBtn" class="ghost small-btn" hidden>Install</button>
     </header>
-
     <main>
       <section class="page active" id="page-home">
         <div class="date-row">
@@ -29,7 +28,6 @@
           <input type="date" id="selectedDate" />
           <button class="icon-btn" id="nextDay">›</button>
         </div>
-
         <section class="hero-card">
           <div class="ring-wrap">
             <svg class="ring" viewBox="0 0 120 120" aria-label="Calories progress">
@@ -47,20 +45,17 @@
             <div class="muted" id="calTargetText">of 0 kcal target</div>
           </div>
         </section>
-
         <section class="macro-grid" id="macroGrid"></section>
 
         <section class="section-card">
           <div class="section-head"><h2>Meals</h2><button class="link-btn" data-nav="food">+ Add food</button></div>
           <div id="mealSummary"></div>
         </section>
-
         <section class="section-card">
           <div class="section-head"><h2>Body</h2><button class="link-btn" data-nav="body">Log</button></div>
           <div id="bodySummary" class="empty-copy">No body measurements yet.</div>
         </section>
       </section>
-
       <section class="page" id="page-food">
         <div class="page-title-row"><div><div class="eyebrow">FOOD LOG</div><h2>Add food</h2></div></div>
         <div class="section-card">
@@ -74,7 +69,6 @@
           </div>
           <div id="foodResults" class="food-results"></div>
         </div>
-
         <section class="section-card">
           <details>
             <summary>Manual / custom food</summary>
@@ -92,10 +86,8 @@
             <button class="primary wide" id="addCustomFood">Add custom food</button>
           </details>
         </section>
-
         <section class="section-card"><div class="section-head"><h2>Logged today</h2><span id="logTotal" class="pill"></span></div><div id="foodLog"></div></section>
       </section>
-
       <section class="page" id="page-body">
         <div class="page-title-row"><div><div class="eyebrow">BODY</div><h2>Measurements</h2></div></div>
         <section class="section-card">
@@ -115,7 +107,6 @@
         </section>
         <section class="section-card"><h2>History</h2><div id="bodyHistory"></div></section>
       </section>
-
       <section class="page" id="page-trends">
         <div class="page-title-row"><div><div class="eyebrow">ANALYTICS</div><h2>Trends</h2></div><select id="trendRange" class="mini-select"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option></select></div>
         <section class="chart-card"><div class="section-head"><h3>Calories</h3><span class="muted" id="avgCalories"></span></div><canvas id="chartCalories" width="760" height="300"></canvas></section>
@@ -123,7 +114,6 @@
         <section class="chart-card"><div class="section-head"><h3>Weight</h3><span class="muted" id="weightChange"></span></div><canvas id="chartWeight" width="760" height="300"></canvas></section>
         <section class="chart-card"><div class="section-head"><h3>Body fat</h3><span class="muted" id="fatChange"></span></div><canvas id="chartFat" width="760" height="300"></canvas></section>
       </section>
-
       <section class="page" id="page-settings">
         <div class="page-title-row"><div><div class="eyebrow">SETTINGS</div><h2>Profile & targets</h2></div></div>
         <section class="section-card">
@@ -153,7 +143,6 @@
         <section class="section-card" id="installHelp"><h2>Install on iPhone</h2><p class="muted note">Open this site in Safari → tap Share → Add to Home Screen → Add. NutriTrack will then open like a normal app.</p></section>
       </section>
     </main>
-
     <nav class="bottom-nav">
       <button class="nav-item active" data-nav="home"><span>⌂</span><small>Today</small></button>
       <button class="nav-item" data-nav="food"><span>＋</span><small>Food</small></button>
@@ -162,7 +151,6 @@
       <button class="nav-item" data-nav="settings"><span>⚙</span><small>Settings</small></button>
     </nav>
   </div>
-
   <dialog id="foodDialog">
     <form method="dialog" class="dialog-card">
       <button class="dialog-close" value="cancel">×</button>
@@ -174,5 +162,6 @@
   </dialog>
   <div class="toast" id="toast"></div>
   <script src="app.js"></script>
+  <script src="online-food-search.js"></script>
 </body>
 </html>
