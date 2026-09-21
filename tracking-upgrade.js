@@ -439,3 +439,301 @@
   renderAll();
   populateMealTargetInputs(true);
 })();
+
+
+// v8.2: logged-food editor + sugar visibility upgrade
+(() => {
+  'use strict';
+
+  const q2 = s => document.querySelector(s);
+  const qa2 = s => [...document.querySelectorAll(s)];
+  const esc2 = value => String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+  const num2 = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
+  const round2 = (v, d = 1) => Math.round(num2(v) * 10 ** d) / 10 ** d;
+
+  function injectFoodEditStyles() {
+    if (q2('#foodEditSugarStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'foodEditSugarStyles';
+    style.textContent = `
+      .logged-food-row{align-items:flex-start;gap:10px}
+      .logged-food-row>div:first-child{min-width:0;flex:1}
+      .logged-food-row .row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}
+      .log-nutrients{margin-top:5px;line-height:1.45}
+      .edit-food-mini{border:1px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:10px;padding:7px 10px;font-weight:700;font-size:12px;min-height:34px}
+      .edit-food-mini:active{transform:translateY(1px)}
+      .food-log-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+      .other-nutrient-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+      .other-nutrient-card{border:1px solid #e2e8f0;border-radius:14px;padding:10px;background:#f8fafc;min-width:0}
+      .other-nutrient-card strong{display:block;font-size:18px;margin:3px 0 2px}
+      .other-nutrient-card small{display:block;color:#64748b;font-size:11px;line-height:1.3}
+      .other-nutrient-card .mini-bar{margin-top:7px}
+      #editFoodDialog .form-grid{margin-top:12px}
+      #editFoodDialog .dialog-actions{align-items:center}
+      #deleteEditedFood{margin-right:auto}
+      @media(max-width:430px){
+        .other-nutrient-grid{grid-template-columns:1fr}
+        .logged-food-row{display:block}
+        .logged-food-row .row-actions{margin-top:10px;flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function ensureEditDialog() {
+    if (q2('#editFoodDialog')) return;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'editFoodDialog';
+    dialog.innerHTML = `
+      <form method="dialog" class="dialog-card" id="editFoodForm">
+        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
+        <h3>Edit logged food</h3>
+        <p class="muted" id="editFoodHint">Change the serving or any nutrition value, then save.</p>
+        <div class="form-grid compact">
+          <label>Date<input id="editFoodDate" type="date" /></label>
+          <label>Meal<select id="editFoodMeal"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option></select></label>
+          <label>Name<input id="editFoodName" /></label>
+          <label>Serving<input id="editFoodServing" placeholder="e.g. 150 g" /></label>
+          <label>Calories<input id="editFoodCal" type="number" step="1" min="0" inputmode="decimal" /></label>
+          <label>Protein g<input id="editFoodProtein" type="number" step="0.1" min="0" inputmode="decimal" /></label>
+          <label>Carbs g<input id="editFoodCarbs" type="number" step="0.1" min="0" inputmode="decimal" /></label>
+          <label>Fat g<input id="editFoodFat" type="number" step="0.1" min="0" inputmode="decimal" /></label>
+          <label>Fibre g<input id="editFoodFibre" type="number" step="0.1" min="0" inputmode="decimal" /></label>
+          <label>Sugar g<input id="editFoodSugar" type="number" step="0.1" min="0" inputmode="decimal" /></label>
+          <label>Sodium mg<input id="editFoodSodium" type="number" step="1" min="0" inputmode="decimal" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="danger" id="deleteEditedFood">Delete</button>
+          <button value="cancel" class="secondary">Cancel</button>
+          <button type="button" class="primary" id="saveEditedFood">Save changes</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dialog);
+    q2('#saveEditedFood')?.addEventListener('click', saveEditedFood);
+    q2('#deleteEditedFood')?.addEventListener('click', deleteEditedFood);
+  }
+
+  let editingFoodId = null;
+
+  function openLoggedFoodEditor(fid) {
+    ensureEditDialog();
+    const item = state.foods.find(x => String(x.id) === String(fid));
+    if (!item) return toast('Food entry not found');
+    editingFoodId = item.id;
+    const set = (id, value) => { const el = q2('#' + id); if (el) el.value = value ?? ''; };
+    set('editFoodDate', item.date || (q2('#foodDate')?.value || today()));
+    set('editFoodMeal', item.meal || 'Breakfast');
+    set('editFoodName', item.name || '');
+    set('editFoodServing', item.serving || '');
+    set('editFoodCal', round2(item.cal, 0));
+    set('editFoodProtein', round2(item.protein, 1));
+    set('editFoodCarbs', round2(item.carbs, 1));
+    set('editFoodFat', round2(item.fat, 1));
+    set('editFoodFibre', round2(item.fibre, 1));
+    set('editFoodSugar', round2(item.sugar, 1));
+    set('editFoodSodium', round2(item.sodium, 0));
+    q2('#editFoodDialog')?.showModal();
+  }
+
+  function saveEditedFood() {
+    const item = state.foods.find(x => String(x.id) === String(editingFoodId));
+    if (!item) return toast('Food entry not found');
+    const name = q2('#editFoodName')?.value.trim();
+    const date = q2('#editFoodDate')?.value;
+    if (!name) return toast('Enter a food name');
+    if (!date) return toast('Choose a date');
+    Object.assign(item, {
+      date,
+      meal: q2('#editFoodMeal')?.value || 'Breakfast',
+      name,
+      serving: q2('#editFoodServing')?.value.trim() || 'custom',
+      cal: Math.max(0, num2(q2('#editFoodCal')?.value)),
+      protein: Math.max(0, num2(q2('#editFoodProtein')?.value)),
+      carbs: Math.max(0, num2(q2('#editFoodCarbs')?.value)),
+      fat: Math.max(0, num2(q2('#editFoodFat')?.value)),
+      fibre: Math.max(0, num2(q2('#editFoodFibre')?.value)),
+      sugar: Math.max(0, num2(q2('#editFoodSugar')?.value)),
+      sodium: Math.max(0, num2(q2('#editFoodSodium')?.value)),
+      updated: Date.now()
+    });
+    save();
+    q2('#editFoodDialog')?.close();
+    editingFoodId = null;
+    renderAll();
+    toast('Food entry updated');
+  }
+
+  function deleteEditedFood() {
+    const item = state.foods.find(x => String(x.id) === String(editingFoodId));
+    if (!item) return;
+    if (!confirm(`Delete ${item.name || 'this food'} from the log?`)) return;
+    state.foods = state.foods.filter(x => String(x.id) !== String(editingFoodId));
+    save();
+    q2('#editFoodDialog')?.close();
+    editingFoodId = null;
+    renderAll();
+    toast('Food removed');
+  }
+
+  function deleteLoggedFood(fid) {
+    const item = state.foods.find(x => String(x.id) === String(fid));
+    if (!item) return;
+    if (!confirm(`Delete ${item.name || 'this food'} from the log?`)) return;
+    state.foods = state.foods.filter(x => String(x.id) !== String(fid));
+    save();
+    renderAll();
+    toast('Food removed');
+  }
+
+  function renderEditableFoodLog() {
+    const date = q2('#foodDate')?.value || today();
+    const arr = state.foods
+      .filter(x => x.date === date)
+      .sort((a,b) => num2(a.created) - num2(b.created));
+    const t = totals(date);
+    const totalPill = q2('#logTotal');
+    if (totalPill) totalPill.textContent = `${Math.round(t.cal)} kcal · Sugar ${round2(t.sugar, 1)} g`;
+    const heading = q2('#foodLog')?.closest('.section-card')?.querySelector('.section-head h2');
+    if (heading) heading.textContent = 'Logged foods';
+    const box = q2('#foodLog');
+    if (!box) return;
+    box.innerHTML = arr.length ? arr.map(x => `
+      <div class="log-row logged-food-row">
+        <div>
+          <strong>${esc2(x.name)}</strong>
+          <div class="row-meta">${esc2(x.meal || '')} · ${esc2(x.serving || '')}</div>
+          <div class="row-meta log-nutrients">P ${round2(x.protein,1)}g · C ${round2(x.carbs,1)}g · F ${round2(x.fat,1)}g · <strong>Sugar ${round2(x.sugar,1)}g</strong></div>
+          <div class="row-meta">Fibre ${round2(x.fibre,1)}g · Sodium ${Math.round(num2(x.sodium))}mg</div>
+        </div>
+        <div class="row-actions">
+          <strong>${Math.round(num2(x.cal))} kcal</strong>
+          <button type="button" class="edit-food-mini" data-edit-food="${esc2(x.id)}">View / Edit</button>
+          <button type="button" class="delete-mini" aria-label="Delete food" data-del-food-v82="${esc2(x.id)}">×</button>
+        </div>
+      </div>`).join('') : '<div class="empty-copy">Nothing logged for this day.</div>';
+    qa2('[data-edit-food]').forEach(b => b.addEventListener('click', () => openLoggedFoodEditor(b.dataset.editFood)));
+    qa2('[data-del-food-v82]').forEach(b => b.addEventListener('click', () => deleteLoggedFood(b.dataset.delFoodV82)));
+  }
+
+  function addSugarToFoodResults() {
+    qa2('#foodResults .food-result').forEach(row => {
+      const add = row.querySelector('[data-food]');
+      const nutrition = row.querySelector('.nutrition');
+      if (!add || !nutrition || /(?:^|·)\s*Sugar\s/i.test(nutrition.textContent)) return;
+      const food = FOOD_DB.find(f => String(f.id) === String(add.dataset.food));
+      if (!food) return;
+      nutrition.textContent += ` · Sugar ${round2(food.sugar,1)}g`;
+    });
+  }
+
+  function renderFullDialogNutrition() {
+    if (!dialogFood) return;
+    const qty = Math.max(.1, num2(q2('#dialogQty')?.value, 1));
+    const box = q2('#dialogNutrition');
+    if (!box) return;
+    const vals = [
+      ['Calories', dialogFood.cal * qty, 'kcal', 0],
+      ['Protein', dialogFood.protein * qty, 'g', 1],
+      ['Carbs', dialogFood.carbs * qty, 'g', 1],
+      ['Fat', dialogFood.fat * qty, 'g', 1],
+      ['Fibre', dialogFood.fibre * qty, 'g', 1],
+      ['Sugar', dialogFood.sugar * qty, 'g', 1],
+      ['Sodium', dialogFood.sodium * qty, 'mg', 0]
+    ];
+    box.innerHTML = vals.map(([label,value,unit,digits]) => `<div><b>${round2(value,digits)} ${unit}</b><span>${label}</span></div>`).join('');
+  }
+
+  function ensureViewEditButton() {
+    const head = q2('#mealSummary')?.closest('.section-card')?.querySelector('.section-head');
+    if (!head || q2('#viewEditFoodLog')) return;
+    const actions = document.createElement('div');
+    actions.className = 'food-log-heading-actions';
+    const existingAdd = head.querySelector('[data-nav="food"]');
+    if (existingAdd) actions.appendChild(existingAdd);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'viewEditFoodLog';
+    btn.className = 'link-btn';
+    btn.textContent = 'View / edit';
+    actions.appendChild(btn);
+    head.appendChild(actions);
+    btn.addEventListener('click', () => {
+      const date = selectedDate();
+      if (q2('#foodDate')) q2('#foodDate').value = date;
+      renderFoodLog();
+      navigate('food');
+      setTimeout(() => q2('#foodLog')?.closest('.section-card')?.scrollIntoView({behavior:'smooth',block:'start'}), 120);
+    });
+  }
+
+  function ensureOtherNutrientsCard() {
+    if (q2('#otherNutrientsCard')) return;
+    const macroGrid = q2('#macroGrid');
+    if (!macroGrid) return;
+    const card = document.createElement('section');
+    card.id = 'otherNutrientsCard';
+    card.className = 'section-card';
+    card.innerHTML = '<div class="section-head"><h2>Other nutrients</h2><span class="pill">Daily</span></div><div id="otherNutrientGrid" class="other-nutrient-grid"></div>';
+    macroGrid.insertAdjacentElement('afterend', card);
+  }
+
+  function renderOtherNutrients() {
+    ensureOtherNutrientsCard();
+    const box = q2('#otherNutrientGrid');
+    if (!box) return;
+    const t = totals(selectedDate());
+    const g = targets();
+    const items = [
+      ['Fibre', t.fibre, g.fibre, 'g', 1],
+      ['Sugar', t.sugar, g.sugar, 'g', 1],
+      ['Sodium', t.sodium, g.sodium, 'mg', 0]
+    ];
+    box.innerHTML = items.map(([label,value,target,unit,digits]) => {
+      const p = target ? Math.min(100, Math.max(0, num2(value) / num2(target) * 100)) : 0;
+      return `<div class="other-nutrient-card"><span class="muted">${label}</span><strong>${round2(value,digits)}${unit}</strong><div class="mini-bar"><i style="width:${p}%"></i></div><small>${round2(target,digits)}${unit} target</small></div>`;
+    }).join('');
+  }
+
+  injectFoodEditStyles();
+  ensureEditDialog();
+  ensureViewEditButton();
+  ensureOtherNutrientsCard();
+
+  // Show sugar in every local / saved-food result.
+  if (typeof renderFoodResults === 'function') {
+    const previousRenderFoodResultsV82 = renderFoodResults;
+    renderFoodResults = function () {
+      previousRenderFoodResultsV82();
+      addSugarToFoodResults();
+    };
+  }
+
+  // Show full nutrition, including sugar, when choosing a serving.
+  if (typeof renderDialogNutrition === 'function') {
+    renderDialogNutrition = renderFullDialogNutrition;
+    q2('#dialogQty')?.addEventListener('input', renderFullDialogNutrition);
+  }
+
+  // Replace the delete-only daily log with a proper view/edit log.
+  if (typeof renderFoodLog === 'function') {
+    renderFoodLog = renderEditableFoodLog;
+    if (q2('#foodDate')) q2('#foodDate').onchange = renderFoodLog;
+  }
+
+  // Add fibre / sugar / sodium progress to Today.
+  if (typeof renderHome === 'function') {
+    const previousRenderHomeV82 = renderHome;
+    renderHome = function () {
+      previousRenderHomeV82();
+      ensureViewEditButton();
+      renderOtherNutrients();
+    };
+    if (q2('#selectedDate')) q2('#selectedDate').onchange = renderHome;
+  }
+
+  renderFoodResults();
+  renderFoodLog();
+  renderHome();
+})();

@@ -177,7 +177,7 @@
           <div class="food-result">
             <div>
               <div class="title">${state?.favorites?.includes(f.id) ? '<span class="star">★</span> ' : ''}${esc(f.name)}</div>
-              <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g</div>
+              <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g · Sugar ${esc(f.sugar)}g</div>
               <div class="row-meta">Saved from ${esc(f.source || 'online search')}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
@@ -549,7 +549,7 @@
         <div class="food-result">
           <div>
             <div class="title">${esc(f.name)}</div>
-            <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g</div>
+            <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g · Sugar ${esc(f.sugar)}g</div>
             <div class="row-meta">${esc(f.source)}${f.code ? ` · ${esc(f.code)}` : ''}</div>
           </div>
           <button class="add-btn" type="button" data-online-food="${i}">Use + save</button>

@@ -1,4 +1,4 @@
-const CACHE='nutritrack-v8.1-online-search-fix';
+const CACHE='nutritrack-v8.2-food-edit-sugar';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./online-food-search.js','./weight-plan.js','./tracking-upgrade.js','./manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
