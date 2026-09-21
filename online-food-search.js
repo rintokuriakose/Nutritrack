@@ -57,6 +57,7 @@
       _lookupKey: key,
       source: f.source || 'Online',
       code: f.code || '',
+      image: f.image || found?.image || '',
       name: f.name || 'Saved food',
       serving: f.serving || '100 g',
       cal: round(f.cal, 0), protein: round(f.protein, 1), carbs: round(f.carbs, 1),
@@ -174,7 +175,7 @@
         const arr = FOOD_DB.filter(f => String(f.tags || '').includes('myfood') &&
           (!q || String(f.name || '').toLowerCase().includes(q) || String(f.serving || '').toLowerCase().includes(q))).slice(0, 50);
         localResults.innerHTML = arr.length ? arr.map(f => `
-          <div class="food-result">
+          <div class="food-result" data-food-image="${esc(f.image || '')}">
             <div>
               <div class="title">${state?.favorites?.includes(f.id) ? '<span class="star">★</span> ' : ''}${esc(f.name)}</div>
               <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g · Sugar ${esc(f.sugar)}g</div>
@@ -398,7 +399,8 @@
       fat: round(scale(fat), 1),
       fibre: round(scale(fibre), 1),
       sugar: round(scale(sugar), 1),
-      sodium: round(sodiumMg, 0)
+      sodium: round(sodiumMg, 0),
+      image: p?.image_front_small_url || p?.image_front_url || ''
     };
   }
 
@@ -493,7 +495,7 @@
 
     let res;
     try {
-      const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(q)}.json?fields=code,product_name,brands,serving_size,nutriments`;
+      const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(q)}.json?fields=code,product_name,brands,serving_size,nutriments,image_front_small_url,image_front_url`;
       res = await fetch(url, { cache: 'no-store' });
     } catch (e) {
       throw searchError('Open Food Facts', 0, e?.message);
@@ -546,7 +548,7 @@
       results.innerHTML = '<div class="empty-copy">No usable online nutrition result found. Try a simpler food name (for example “grapes” or “chicken breast”). For packaged foods, a barcode lookup can be more accurate.</div>';
     } else {
       results.innerHTML = items.map((f, i) => `
-        <div class="food-result">
+        <div class="food-result" data-food-image="${esc(f.image || '')}">
           <div>
             <div class="title">${esc(f.name)}</div>
             <div class="nutrition">${esc(f.serving)} · ${esc(f.cal)} kcal · P ${esc(f.protein)}g · C ${esc(f.carbs)}g · F ${esc(f.fat)}g · Sugar ${esc(f.sugar)}g</div>

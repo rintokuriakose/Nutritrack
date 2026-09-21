@@ -1,0 +1,32 @@
+NutriTrack v9 — Compact Glass UI
+
+Upload/replace these files in the ROOT of the GitHub Nutritrack repository:
+
+1. index.html               REPLACE
+2. online-food-search.js    REPLACE
+3. weight-plan.js           REPLACE (same planner, included for a complete matched set)
+4. tracking-upgrade.js      REPLACE (same tracking features, included for a complete matched set)
+5. glass-ui.css             NEW
+6. glass-ui.js              NEW
+7. sw.js                    REPLACE
+
+Do not delete app.js, styles.css, manifest.webmanifest, icon-192.png or icon-512.png.
+
+After committing:
+- Wait 1–2 minutes for GitHub Pages.
+- Open the site in Safari and refresh twice.
+- If installed on the Home Screen, fully close NutriTrack and reopen it.
+
+v9 changes:
+- Compact glassmorphism layout
+- Floating glass bottom navigation with SVG icons
+- Compact Today dashboard and quick actions
+- +250 ml water shortcut from Today
+- Tap a meal row to jump straight to Add Food for that meal
+- Food thumbnails in search results and logged food rows
+- Large food photo when a food is selected
+- Exact Open Food Facts product photo is used for barcode products when available
+- Category photo fallback for normal foods
+- Animated page/card entrance, modal image, progress bars, buttons and water shortcut
+- System dark-mode glass theme
+- Reduced-motion accessibility support
