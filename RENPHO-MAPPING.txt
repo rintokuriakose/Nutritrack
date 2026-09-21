@@ -1,0 +1,27 @@
+RENPHO screenshot mapping verified from the supplied 21 Sep 2026 screenshot
+
+Weight                     106.20 kg
+BMI                         32.1
+Body Fat Percentage         32.7 %
+Body Fat Mass               34.73 kg
+Subcutaneous Fat            28.5 %
+Visceral Fat                14
+Muscle Percentage           63.9 %
+Muscle Mass                 67.90 kg
+Skeletal Muscle Percentage  43.5 %
+Skeletal Muscle Mass        46.20 kg
+Bone Percentage             3.4 %
+Bone Mass                   3.60 kg
+Fat-Free Mass               71.50 kg
+Metabolic Age               40
+BMR                         1914 kcal
+Body Water Percentage       48.6 %
+Body Water Mass             51.61 kg
+Protein Percentage          15.3 %
+Protein Mass                16.25 kg
+
+Important fixes in this update:
+- 51.61 is Body Water Mass (kg), NOT Body Water Percentage.
+- 16.25 is Protein Mass (kg), NOT Protein Percentage.
+- Visceral Fat is 14, NOT 4.
+- Percentage and mass fields are parsed separately.

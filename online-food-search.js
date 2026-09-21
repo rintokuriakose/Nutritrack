@@ -522,16 +522,24 @@
 
   const get = id => document.getElementById(id);
   const safeNum = v => Number.isFinite(Number(v)) ? Number(v) : null;
-  const fmt = (v, d = 1) => v == null ? '' : String(Math.round(v * 10 ** d) / 10 ** d);
+  const round = (v, d = 1) => v == null ? null : Math.round(v * 10 ** d) / 10 ** d;
+  const fmt = (v, d = 1) => v == null ? '' : String(round(v, d));
 
-  // Extra RENPHO measurements that were not in the original Body form.
+  // Full RENPHO mapping. The original Body form already contains Weight, Body fat %,
+  // Muscle mass kg, Body water %, Visceral fat, Bone mass kg and Metabolic age.
   const extraFields = [
     ['bodyBMI', 'BMI', '0.1'],
+    ['bodyFatMass', 'Body fat mass kg', '0.01'],
     ['bodySubcutaneousFat', 'Subcutaneous fat %', '0.1'],
+    ['bodyMusclePct', 'Muscle percentage %', '0.1'],
     ['bodySkeletalMuscle', 'Skeletal muscle %', '0.1'],
-    ['bodyFatFreeWeight', 'Fat-free body weight kg', '0.1'],
+    ['bodySkeletalMuscleMass', 'Skeletal muscle mass kg', '0.01'],
+    ['bodyBonePct', 'Bone percentage %', '0.1'],
+    ['bodyFatFreeWeight', 'Fat-free mass kg', '0.01'],
+    ['bodyBMR', 'BMR kcal', '1'],
+    ['bodyWaterMass', 'Body water mass kg', '0.01'],
     ['bodyProteinPct', 'Protein %', '0.1'],
-    ['bodyBMR', 'BMR kcal', '1']
+    ['bodyProteinMass', 'Protein mass kg', '0.01']
   ];
   extraFields.forEach(([id, label, step]) => {
     if (get(id)) return;
@@ -544,13 +552,13 @@
   importCard.className = 'section-card';
   importCard.id = 'renphoImportCard';
   importCard.innerHTML = `
-    <div class="section-head"><h2>Import RENPHO screenshot</h2><span class="pill">On-device OCR</span></div>
-    <p class="muted note">Choose a screenshot from the RENPHO app. NutriTrack will read the values on this device, fill the measurement fields, and let you review them before saving.</p>
+    <div class="section-head"><h2>Import RENPHO screenshot</h2><span class="pill">Mapped to RENPHO</span></div>
+    <p class="muted note">Choose the full RENPHO result screenshot. NutriTrack now distinguishes percentage values from mass values (for example Body Water % vs Body Water Mass) and fills every matching field for review before saving.</p>
     <label class="secondary file-label" style="display:flex;justify-content:center;align-items:center;min-height:44px;cursor:pointer">
       Choose RENPHO screenshot
       <input id="renphoScreenshot" type="file" accept="image/*" hidden />
     </label>
-    <img id="renphoPreview" alt="RENPHO screenshot preview" style="display:none;width:100%;max-height:420px;object-fit:contain;border-radius:12px;margin-top:12px" />
+    <img id="renphoPreview" alt="RENPHO screenshot preview" style="display:none;width:100%;max-height:460px;object-fit:contain;border-radius:12px;margin-top:12px" />
     <button type="button" class="primary wide" id="renphoReadBtn" style="margin-top:12px" disabled>Read values from screenshot</button>
     <div id="renphoStatus" class="muted note" style="margin-top:10px"></div>
     <div id="renphoExtracted" style="margin-top:10px"></div>`;
@@ -592,6 +600,7 @@
     return new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-nutritrack-tesseract]');
       if (existing) {
+        if (window.Tesseract) return resolve(window.Tesseract);
         existing.addEventListener('load', () => resolve(window.Tesseract), { once: true });
         existing.addEventListener('error', reject, { once: true });
         return;
@@ -606,36 +615,66 @@
     });
   }
 
-  const cleanLabel = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  const numberMatch = s => String(s).match(/(-?\d{1,4}(?:[.,]\d{1,2})?)\s*(kg|kgs|lb|lbs|%|kcal)?/i);
+  const clean = s => String(s || '').toLowerCase().replace(/[|]/g, 'i').replace(/[^a-z0-9.%]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const rawNumbers = s => [...String(s || '').matchAll(/(-?\d{1,4}(?:[.,]\d{1,2})?)\s*(kg|kgs|lb|lbs|%|kcal)?/gi)].map(m => ({ value: Number(m[1].replace(',', '.')), unit: (m[2] || '').toLowerCase() }));
 
-  function metricFromLines(lines, labels, { skip = [], min = -Infinity, max = Infinity, weight = false } = {}) {
-    const normalizedLabels = labels.map(cleanLabel);
-    const normalizedSkip = skip.map(cleanLabel);
-    for (let i = 0; i < lines.length; i++) {
-      const cl = cleanLabel(lines[i]);
-      if (!normalizedLabels.some(l => cl.includes(l))) continue;
-      if (normalizedSkip.some(l => cl.includes(l))) continue;
+  function findMetric(lines, cfg) {
+    const { labels, min = -Infinity, max = Infinity, unit = '', excludes = [], starts = false } = cfg;
+    for (const label of labels) {
+      const nl = clean(label);
+      for (let i = 0; i < lines.length; i++) {
+        const cl = clean(lines[i]);
+        const match = starts ? (cl === nl || cl.startsWith(nl + ' ')) : cl.includes(nl);
+        if (!match) continue;
+        if (excludes.some(x => cl.includes(clean(x)))) continue;
 
-      let candidate = lines[i];
-      // Remove text before/including the first matching label so a number in the label area is not selected.
-      const lower = candidate.toLowerCase();
-      let cut = -1;
-      for (const label of labels) {
-        const pos = lower.indexOf(label.toLowerCase());
-        if (pos >= 0) { cut = Math.max(cut, pos + label.length); }
+        const candidates = [];
+        const pos = cl.indexOf(nl);
+        if (pos >= 0) {
+          // Use original line, but strip text before the matching label to avoid unrelated numbers.
+          const origLower = String(lines[i]).toLowerCase();
+          const origPos = origLower.indexOf(String(label).toLowerCase());
+          candidates.push(origPos >= 0 ? String(lines[i]).slice(origPos + String(label).length) : lines[i]);
+        }
+        if (i + 1 < lines.length) candidates.push(lines[i + 1]);
+        if (i + 2 < lines.length) candidates.push(lines[i + 2]);
+
+        let fallback = null;
+        for (const c of candidates) {
+          for (const m of rawNumbers(c)) {
+            let v = m.value;
+            if (m.unit === 'lb' || m.unit === 'lbs') v *= 0.45359237;
+            if (v < min || v > max) continue;
+            if (unit && m.unit === unit) return v;
+            if (unit && !m.unit && fallback == null) fallback = v;
+            if (!unit && !m.unit) return v;
+            if (!unit && fallback == null) fallback = v;
+          }
+        }
+        if (fallback != null) return fallback;
       }
-      if (cut >= 0) candidate = candidate.slice(cut);
-      let m = numberMatch(candidate);
-      if (!m && i + 1 < lines.length) m = numberMatch(lines[i + 1]);
-      if (!m) continue;
-
-      let value = Number(m[1].replace(',', '.'));
-      const unit = (m[2] || '').toLowerCase();
-      if (weight && (unit === 'lb' || unit === 'lbs')) value *= 0.45359237;
-      if (value >= min && value <= max) return value;
     }
     return null;
+  }
+
+  function parseScreenshotDate(text) {
+    const s = String(text || '');
+    const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12 };
+    let m = s.match(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i);
+    if (m) {
+      const mm = months[m[2].toLowerCase().slice(0,4)] || months[m[2].toLowerCase().slice(0,3)];
+      if (mm) return `${m[3]}-${String(mm).padStart(2,'0')}-${String(Number(m[1])).padStart(2,'0')}`;
+    }
+    m = s.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](20\d{2})\b/);
+    if (m) return `${m[3]}-${String(Number(m[2])).padStart(2,'0')}-${String(Number(m[1])).padStart(2,'0')}`;
+    return null;
+  }
+
+  function derivePair(x, pctKey, massKey) {
+    const w = x.weight;
+    if (!w) return;
+    if (x[pctKey] == null && x[massKey] != null) x[pctKey] = x[massKey] / w * 100;
+    if (x[massKey] == null && x[pctKey] != null) x[massKey] = w * x[pctKey] / 100;
   }
 
   function parseRenpho(text) {
@@ -645,36 +684,66 @@
       .map(x => x.replace(/[|]/g, 'I').replace(/\s+/g, ' ').trim())
       .filter(Boolean);
 
-    return {
-      weight: metricFromLines(lines, ['weight'], { skip: ['fat free', 'fat-free'], min: 20, max: 300, weight: true }),
-      bmi: metricFromLines(lines, ['bmi'], { min: 10, max: 80 }),
-      fat: metricFromLines(lines, ['body fat'], { min: 2, max: 75 }),
-      subcutaneous: metricFromLines(lines, ['subcutaneous fat'], { min: 1, max: 70 }),
-      visceral: metricFromLines(lines, ['visceral fat'], { min: 1, max: 60 }),
-      water: metricFromLines(lines, ['body water', 'water'], { min: 20, max: 85 }),
-      skeletalMuscle: metricFromLines(lines, ['skeletal muscle'], { min: 10, max: 80 }),
-      muscle: metricFromLines(lines, ['muscle mass'], { min: 10, max: 180, weight: true }),
-      bone: metricFromLines(lines, ['bone mass'], { min: 0.5, max: 12, weight: true }),
-      proteinPct: metricFromLines(lines, ['protein'], { min: 5, max: 35 }),
-      bmr: metricFromLines(lines, ['bmr', 'basal metabolic rate'], { min: 500, max: 4500 }),
-      metabolicAge: metricFromLines(lines, ['metabolic age'], { min: 10, max: 120 }),
-      fatFreeWeight: metricFromLines(lines, ['fat-free body weight', 'fat free body weight', 'fat free weight'], { min: 20, max: 250, weight: true })
+    const x = {
+      date: parseScreenshotDate(text),
+      weight: findMetric(lines, { labels: ['weight'], starts: true, excludes: ['fat-free', 'fat free'], min: 20, max: 300, unit: 'kg' }),
+      bmi: findMetric(lines, { labels: ['bmi'], starts: true, min: 10, max: 80 }),
+      fat: findMetric(lines, { labels: ['body fat percentage', 'body fat %'], min: 2, max: 75, unit: '%' }),
+      bodyFatMass: findMetric(lines, { labels: ['body fat mass'], min: 1, max: 200, unit: 'kg' }),
+      subcutaneous: findMetric(lines, { labels: ['subcutaneous fat'], min: 1, max: 70, unit: '%' }),
+      visceral: findMetric(lines, { labels: ['visceral fat'], min: 1, max: 60 }),
+      musclePct: findMetric(lines, { labels: ['muscle percentage'], excludes: ['skeletal'], min: 10, max: 90, unit: '%' }),
+      muscle: findMetric(lines, { labels: ['muscle mass'], excludes: ['skeletal'], min: 10, max: 180, unit: 'kg' }),
+      skeletalMuscle: findMetric(lines, { labels: ['skeletal muscle percentage'], min: 10, max: 80, unit: '%' }),
+      skeletalMuscleMass: findMetric(lines, { labels: ['skeletal muscle mass'], min: 5, max: 150, unit: 'kg' }),
+      bonePct: findMetric(lines, { labels: ['bone percentage'], min: 1, max: 10, unit: '%' }),
+      bone: findMetric(lines, { labels: ['bone mass'], min: 0.5, max: 12, unit: 'kg' }),
+      fatFreeWeight: findMetric(lines, { labels: ['fat-free mass', 'fat free mass', 'fat-free body weight', 'fat free body weight'], min: 20, max: 250, unit: 'kg' }),
+      metabolicAge: findMetric(lines, { labels: ['metabolic age'], min: 10, max: 120 }),
+      bmr: findMetric(lines, { labels: ['bmr', 'basal metabolic rate'], min: 500, max: 4500, unit: 'kcal' }),
+      water: findMetric(lines, { labels: ['body water percentage', 'water percentage'], min: 20, max: 85, unit: '%' }),
+      waterMass: findMetric(lines, { labels: ['body water mass', 'water mass'], min: 10, max: 200, unit: 'kg' }),
+      proteinPct: findMetric(lines, { labels: ['protein percentage'], min: 5, max: 35, unit: '%' }),
+      proteinMass: findMetric(lines, { labels: ['protein mass'], min: 2, max: 60, unit: 'kg' })
     };
+
+    // Fallbacks for OCR that drops the word "Percentage" but still sees the % sign.
+    if (x.fat == null) x.fat = findMetric(lines, { labels: ['body fat'], excludes: ['mass'], min: 2, max: 75, unit: '%' });
+    if (x.water == null) x.water = findMetric(lines, { labels: ['body water'], excludes: ['mass'], min: 20, max: 85, unit: '%' });
+    if (x.proteinPct == null) x.proteinPct = findMetric(lines, { labels: ['protein'], excludes: ['mass'], min: 5, max: 35, unit: '%' });
+    if (x.skeletalMuscle == null) x.skeletalMuscle = findMetric(lines, { labels: ['skeletal muscle'], excludes: ['mass'], min: 10, max: 80, unit: '%' });
+
+    derivePair(x, 'fat', 'bodyFatMass');
+    derivePair(x, 'musclePct', 'muscle');
+    derivePair(x, 'skeletalMuscle', 'skeletalMuscleMass');
+    derivePair(x, 'bonePct', 'bone');
+    derivePair(x, 'water', 'waterMass');
+    derivePair(x, 'proteinPct', 'proteinMass');
+    if (x.fatFreeWeight == null && x.weight && x.bodyFatMass != null) x.fatFreeWeight = x.weight - x.bodyFatMass;
+
+    // Keep RENPHO-style precision.
+    ['weight','bmi','fat','subcutaneous','visceral','musclePct','skeletalMuscle','bonePct','metabolicAge','water','proteinPct'].forEach(k => { if (x[k] != null) x[k] = round(x[k], 1); });
+    ['bodyFatMass','muscle','skeletalMuscleMass','bone','fatFreeWeight','waterMass','proteinMass'].forEach(k => { if (x[k] != null) x[k] = round(x[k], 2); });
+    if (x.bmr != null) x.bmr = Math.round(x.bmr);
+    return x;
   }
 
+  const fieldMap = [
+    ['bodyWeight', 'weight', 1], ['bodyBMI', 'bmi', 1], ['bodyFat', 'fat', 1], ['bodyFatMass', 'bodyFatMass', 2],
+    ['bodySubcutaneousFat', 'subcutaneous', 1], ['bodyVisceral', 'visceral', 1], ['bodyMusclePct', 'musclePct', 1],
+    ['bodyMuscle', 'muscle', 2], ['bodySkeletalMuscle', 'skeletalMuscle', 1], ['bodySkeletalMuscleMass', 'skeletalMuscleMass', 2],
+    ['bodyBonePct', 'bonePct', 1], ['bodyBone', 'bone', 2], ['bodyFatFreeWeight', 'fatFreeWeight', 2],
+    ['bodyMetabolicAge', 'metabolicAge', 0], ['bodyBMR', 'bmr', 0], ['bodyWater', 'water', 1], ['bodyWaterMass', 'waterMass', 2],
+    ['bodyProteinPct', 'proteinPct', 1], ['bodyProteinMass', 'proteinMass', 2]
+  ];
+
   function fillParsed(x) {
-    const mapping = [
-      ['bodyWeight', x.weight], ['bodyBMI', x.bmi], ['bodyFat', x.fat],
-      ['bodySubcutaneousFat', x.subcutaneous], ['bodyVisceral', x.visceral],
-      ['bodyWater', x.water], ['bodySkeletalMuscle', x.skeletalMuscle],
-      ['bodyMuscle', x.muscle], ['bodyBone', x.bone], ['bodyProteinPct', x.proteinPct],
-      ['bodyBMR', x.bmr], ['bodyMetabolicAge', x.metabolicAge], ['bodyFatFreeWeight', x.fatFreeWeight]
-    ];
+    if (x.date && bodyDate) bodyDate.value = x.date;
     let count = 0;
-    mapping.forEach(([id, value]) => {
-      const el = get(id);
+    fieldMap.forEach(([id, key, digits]) => {
+      const el = get(id), value = x[key];
       if (el && value != null) {
-        el.value = fmt(value, id === 'bodyBMR' || id === 'bodyMetabolicAge' ? 0 : 1);
+        el.value = fmt(value, digits);
         count++;
       }
     });
@@ -682,20 +751,21 @@
     return count;
   }
 
+  const displayMetrics = [
+    ['Weight','weight','kg',1],['BMI','bmi','',1],['Body fat','fat','%',1],['Body fat mass','bodyFatMass','kg',2],
+    ['Subcutaneous fat','subcutaneous','%',1],['Visceral fat','visceral','',1],['Muscle','musclePct','%',1],['Muscle mass','muscle','kg',2],
+    ['Skeletal muscle','skeletalMuscle','%',1],['Skeletal muscle mass','skeletalMuscleMass','kg',2],['Bone','bonePct','%',1],['Bone mass','bone','kg',2],
+    ['Fat-free mass','fatFreeWeight','kg',2],['Metabolic age','metabolicAge','',0],['BMR','bmr','kcal',0],['Body water','water','%',1],
+    ['Body water mass','waterMass','kg',2],['Protein','proteinPct','%',1],['Protein mass','proteinMass','kg',2]
+  ];
+
   function renderExtracted(x) {
-    const labels = [
-      ['Weight', x.weight, 'kg'], ['BMI', x.bmi, ''], ['Body fat', x.fat, '%'],
-      ['Subcutaneous fat', x.subcutaneous, '%'], ['Visceral fat', x.visceral, ''],
-      ['Body water', x.water, '%'], ['Skeletal muscle', x.skeletalMuscle, '%'],
-      ['Muscle mass', x.muscle, 'kg'], ['Bone mass', x.bone, 'kg'],
-      ['Protein', x.proteinPct, '%'], ['BMR', x.bmr, 'kcal'],
-      ['Metabolic age', x.metabolicAge, ''], ['Fat-free body weight', x.fatFreeWeight, 'kg']
-    ].filter(([, v]) => v != null);
+    const labels = displayMetrics.filter(([, key]) => x[key] != null);
     if (!labels.length) {
       extractedBox.innerHTML = '<div class="empty-copy">No RENPHO values were recognised. Try a clear, uncropped screenshot with the labels and numbers visible.</div>';
       return;
     }
-    extractedBox.innerHTML = `<div class="history-row"><div><strong>Recognised ${labels.length} values</strong><div class="row-meta">${labels.map(([a, v, u]) => `${a} ${fmt(v, a === 'BMR' || a === 'Metabolic age' ? 0 : 1)}${u}`).join(' · ')}</div></div><span class="pill">Review below</span></div>`;
+    extractedBox.innerHTML = `<div class="history-row"><div><strong>Recognised ${labels.length} RENPHO values</strong><div class="row-meta">${labels.map(([a,key,u,d]) => `${a} ${fmt(x[key],d)}${u}`).join(' · ')}</div>${x.date ? `<div class="row-meta">Measurement date: ${x.date}</div>` : ''}</div><span class="pill">Review below</span></div>`;
   }
 
   readBtn.addEventListener('click', async () => {
@@ -719,9 +789,9 @@
       const count = fillParsed(parsed);
       renderExtracted(parsed);
       if (count) {
-        setStatus(`Filled ${count} measurement fields. Check the numbers, then tap Save measurement.`);
+        setStatus(`Filled ${count} RENPHO fields. Check the numbers, then tap Save measurement.`);
         bodyFormGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        if (typeof toast === 'function') toast('RENPHO values filled');
+        if (typeof toast === 'function') toast('RENPHO values mapped');
       } else {
         setStatus('Could not confidently read RENPHO measurements from this screenshot.');
       }
@@ -734,7 +804,7 @@
     }
   });
 
-  // Extend the existing Save measurement action with the RENPHO-only fields.
+  // Extend the original save action with every RENPHO-only field.
   const originalSaveBody = saveBodyBtn.onclick;
   saveBodyBtn.onclick = () => {
     if (typeof originalSaveBody === 'function') originalSaveBody();
@@ -743,15 +813,23 @@
       const rec = typeof state !== 'undefined' ? state.body.find(x => x.date === date) : null;
       if (!rec) return;
       const read = id => {
-        const v = safeNum(get(id)?.value);
-        return v == null || v === 0 ? null : v;
+        const el = get(id);
+        if (!el || el.value === '') return null;
+        const v = safeNum(el.value);
+        return v == null ? null : v;
       };
       rec.bmi = read('bodyBMI');
+      rec.bodyFatMass = read('bodyFatMass');
       rec.subcutaneousFat = read('bodySubcutaneousFat');
+      rec.musclePct = read('bodyMusclePct');
       rec.skeletalMuscle = read('bodySkeletalMuscle');
+      rec.skeletalMuscleMass = read('bodySkeletalMuscleMass');
+      rec.bonePct = read('bodyBonePct');
       rec.fatFreeWeight = read('bodyFatFreeWeight');
-      rec.proteinPct = read('bodyProteinPct');
       rec.bmr = read('bodyBMR');
+      rec.waterMass = read('bodyWaterMass');
+      rec.proteinPct = read('bodyProteinPct');
+      rec.proteinMass = read('bodyProteinMass');
       if (lastImported) rec.source = 'RENPHO screenshot';
       if (typeof save === 'function') save();
       if (typeof renderAll === 'function') renderAll();
@@ -761,7 +839,7 @@
     }
   };
 
-  // Show the extra RENPHO measurements in body history without changing app.js.
+  // Enhance Body history with the most useful RENPHO extras while keeping rows readable.
   try {
     const originalRenderBody = typeof renderBody === 'function' ? renderBody : null;
     if (originalRenderBody) {
@@ -774,17 +852,16 @@
           if (!x) return;
           const extras = [];
           if (x.bmi) extras.push(`BMI ${x.bmi}`);
-          if (x.subcutaneousFat) extras.push(`Subcutaneous ${x.subcutaneousFat}%`);
-          if (x.skeletalMuscle) extras.push(`Skeletal muscle ${x.skeletalMuscle}%`);
+          if (x.visceral) extras.push(`Visceral ${x.visceral}`);
+          if (x.skeletalMuscle) extras.push(`Skeletal ${x.skeletalMuscle}%`);
           if (x.fatFreeWeight) extras.push(`Fat-free ${x.fatFreeWeight} kg`);
+          if (x.bmr) extras.push(`BMR ${x.bmr}`);
           if (x.proteinPct) extras.push(`Protein ${x.proteinPct}%`);
-          if (x.bmr) extras.push(`BMR ${x.bmr} kcal`);
           if (extras.length) {
             const info = document.createElement('div');
             info.className = 'row-meta';
             info.textContent = extras.join(' · ');
-            const textWrap = row.firstElementChild;
-            textWrap?.appendChild(info);
+            row.firstElementChild?.appendChild(info);
           }
         });
       };
