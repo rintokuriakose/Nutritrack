@@ -12,6 +12,7 @@
   const round = (v, d = 1) => v == null ? 0 : Math.round(v * 10 ** d) / 10 ** d;
 
   const MY_FOODS_KEY = 'nutritrack_my_foods_v1';
+  const USDA_KEY_STORAGE = 'nutritrack_usda_api_key_v1';
   let myFoods = [];
 
   function loadMyFoods() {
@@ -99,6 +100,10 @@
     ['Boiled egg','1 large',78,6.3,0.6,5.3,0,0.6,62,'quick protein'],
     ['Orange','1 medium',62,1.2,15.4,0.2,3.1,12.2,0,'quick'],
     ['Apple','1 medium',95,0.5,25,0.3,4.4,19,2,'quick'],
+    ['Grapes','100 g',69,0.7,18.1,0.2,0.9,15.5,2,'quick'],
+    ['Strawberries','100 g',32,0.7,7.7,0.3,2,4.9,1,'quick'],
+    ['Blueberries','100 g',57,0.7,14.5,0.3,2.4,10,1,'quick'],
+    ['Avocado','100 g',160,2,8.5,14.7,6.7,0.7,7,'quick'],
     ['Ireland Banana','1 medium',105,1.3,27,0.4,3.1,14.4,1,'quick'],
     ['Broccoli','100 g',35,2.4,7.2,0.4,3.3,1.4,41,'quick'],
     ['Carrot','100 g',41,0.9,9.6,0.2,2.8,4.7,69,'quick'],
@@ -243,6 +248,95 @@
   });
   updateButton();
 
+  function getUsdaKey() {
+    try {
+      const saved = String(localStorage.getItem(USDA_KEY_STORAGE) || '').trim();
+      return saved || 'DEMO_KEY';
+    } catch {
+      return 'DEMO_KEY';
+    }
+  }
+
+  function usingDemoKey() {
+    return getUsdaKey() === 'DEMO_KEY';
+  }
+
+  function installOnlineSearchSettings() {
+    const settingsPage = document.getElementById('page-settings');
+    if (!settingsPage || document.getElementById('onlineFoodSearchSettings')) return;
+
+    const card = document.createElement('section');
+    card.className = 'section-card';
+    card.id = 'onlineFoodSearchSettings';
+    card.innerHTML = `
+      <h2>Online food search</h2>
+      <p class="muted note">NutriTrack uses USDA FoodData Central for food-name searches. The built-in DEMO_KEY has a small shared limit. For reliable searching, paste your own free USDA API key here. It is stored only in this browser and is not added to GitHub.</p>
+      <label>USDA API key
+        <input id="usdaApiKeyInput" type="password" autocomplete="off" placeholder="Leave blank to use DEMO_KEY" />
+      </label>
+      <div class="button-stack" style="margin-top:10px">
+        <button type="button" class="primary" id="saveUsdaApiKey">Save API key</button>
+        <button type="button" class="secondary" id="testUsdaApiKey">Test food search</button>
+        <button type="button" class="secondary" id="useDemoUsdaKey">Use DEMO_KEY</button>
+        <a class="secondary" style="display:flex;align-items:center;justify-content:center;text-decoration:none;min-height:44px" href="https://fdc.nal.usda.gov/api-key-signup/" target="_blank" rel="noopener">Get a free USDA key</a>
+      </div>
+      <div id="usdaKeyStatus" class="muted note" style="margin-top:10px"></div>`;
+
+    const cards = [...settingsPage.querySelectorAll(':scope > .section-card')];
+    const backup = cards.find(x => /backup/i.test(x.textContent || ''));
+    if (backup) settingsPage.insertBefore(card, backup); else settingsPage.appendChild(card);
+
+    const input = document.getElementById('usdaApiKeyInput');
+    const keyStatus = document.getElementById('usdaKeyStatus');
+    try {
+      const saved = String(localStorage.getItem(USDA_KEY_STORAGE) || '').trim();
+      if (saved) input.value = saved;
+    } catch {}
+
+    const refreshKeyStatus = (extra = '') => {
+      const base = usingDemoKey()
+        ? 'Currently using DEMO_KEY (30 requests/hour and 50/day per IP).'
+        : 'Personal USDA key saved on this device.';
+      keyStatus.textContent = extra ? `${base} ${extra}` : base;
+    };
+    refreshKeyStatus();
+
+    document.getElementById('saveUsdaApiKey')?.addEventListener('click', () => {
+      const key = String(input.value || '').trim();
+      try {
+        if (key) localStorage.setItem(USDA_KEY_STORAGE, key);
+        else localStorage.removeItem(USDA_KEY_STORAGE);
+      } catch {}
+      refreshKeyStatus(key ? 'Saved.' : 'Blank key: using DEMO_KEY.');
+      if (typeof toast === 'function') toast(key ? 'USDA key saved' : 'Using USDA DEMO_KEY');
+    });
+
+    document.getElementById('useDemoUsdaKey')?.addEventListener('click', () => {
+      try { localStorage.removeItem(USDA_KEY_STORAGE); } catch {}
+      input.value = '';
+      refreshKeyStatus('DEMO_KEY selected.');
+      if (typeof toast === 'function') toast('Using USDA DEMO_KEY');
+    });
+
+    document.getElementById('testUsdaApiKey')?.addEventListener('click', async e => {
+      const testBtn = e.currentTarget;
+      testBtn.disabled = true;
+      testBtn.textContent = 'Testing…';
+      keyStatus.textContent = 'Testing USDA search…';
+      try {
+        const test = await searchUSDA('apple');
+        refreshKeyStatus(test.length ? `Working — found ${test.length} result${test.length === 1 ? '' : 's'} for apple.` : 'Connection worked, but no usable apple result was returned.');
+      } catch (err) {
+        refreshKeyStatus(formatSearchError(err, 'USDA'));
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = 'Test food search';
+      }
+    });
+  }
+
+  installOnlineSearchSettings();
+
   function parseAmount(text) {
     const m = String(text || '').replace(',', '.').match(/([0-9]+(?:\.[0-9]+)?)\s*(g|ml)\b/i);
     if (!m) return null;
@@ -323,7 +417,7 @@
   }
 
   function usdaFoodToFood(f) {
-    let kcal = nutrient(f, [1008], ['energy'], 'kcal');
+    let kcal = nutrient(f, [1008, 2048, 2047], ['energy', 'atwater'], 'kcal');
     if (kcal == null) {
       const kj = nutrient(f, [1062], ['energy'], 'kj');
       if (kj != null) kcal = kj / 4.184;
@@ -331,6 +425,9 @@
     const protein = nutrient(f, [1003], ['protein'], 'g');
     const fat = nutrient(f, [1004], ['total lipid', 'total fat'], 'g');
     const carbs = nutrient(f, [1005], ['carbohydrate'], 'g');
+    if (kcal == null && (protein != null || fat != null || carbs != null)) {
+      kcal = (protein || 0) * 4 + (carbs || 0) * 4 + (fat || 0) * 9;
+    }
     const fibre = nutrient(f, [1079], ['fiber', 'fibre'], 'g');
     const sugar = nutrient(f, [2000, 1063], ['sugars, total', 'total sugars'], 'g');
     const sodium = nutrient(f, [1093], ['sodium'], 'mg');
@@ -362,43 +459,75 @@
     };
   }
 
-  async function searchOpenFoodFacts(q) {
-    if (/^\d{8,14}$/.test(q)) {
-      const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(q)}.json?fields=code,product_name,brands,serving_size,nutriments`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Open Food Facts ${res.status}`);
-      const data = await res.json();
-      if (data?.status !== 1 || !data?.product) return [];
-      const item = offProductToFood({ ...data.product, code: data.code || q });
-      return item ? [item] : [];
-    }
+  function searchError(provider, status, message = '') {
+    const e = new Error(message || `${provider} ${status || 'request failed'}`);
+    e.provider = provider;
+    e.status = Number(status) || 0;
+    return e;
+  }
 
-    const params = new URLSearchParams({
-      search_terms: q,
-      search_simple: '1',
-      action: 'process',
-      json: '1',
-      page_size: '6',
-      fields: 'code,product_name,brands,serving_size,nutriments'
-    });
-    const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?${params.toString()}`);
-    if (!res.ok) throw new Error(`Open Food Facts ${res.status}`);
+  function formatSearchError(err, provider = '') {
+    const name = provider || err?.provider || 'Online search';
+    const statusCode = Number(err?.status || 0);
+    if (navigator.onLine === false) return 'No internet connection.';
+    if (name === 'USDA' && statusCode === 429) {
+      return usingDemoKey()
+        ? 'USDA DEMO_KEY limit reached. Go to Settings → Online food search and add your own free USDA API key.'
+        : 'USDA rate limit reached. Try again later.';
+    }
+    if (name === 'USDA' && (statusCode === 403 || statusCode === 401)) {
+      return usingDemoKey()
+        ? 'USDA DEMO_KEY was refused. Add your own free USDA API key in Settings → Online food search.'
+        : 'USDA rejected the saved API key. Check it in Settings → Online food search.';
+    }
+    if (statusCode) return `${name} returned error ${statusCode}.`;
+    return `${name} could not be reached.`;
+  }
+
+  async function searchOpenFoodFacts(q) {
+    // Open Food Facts name search currently relies on legacy/full-text search
+    // infrastructure that is not dependable from a static browser app. Barcode
+    // lookup remains useful and does not require an API key, so use OFF for
+    // barcode lookups and USDA for normal food-name searches.
+    if (!/^\d{8,14}$/.test(q)) return [];
+
+    let res;
+    try {
+      const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(q)}.json?fields=code,product_name,brands,serving_size,nutriments`;
+      res = await fetch(url, { cache: 'no-store' });
+    } catch (e) {
+      throw searchError('Open Food Facts', 0, e?.message);
+    }
+    if (!res.ok) throw searchError('Open Food Facts', res.status);
     const data = await res.json();
-    return (data?.products || []).map(offProductToFood).filter(Boolean).slice(0, 6);
+    if (data?.status !== 1 || !data?.product) return [];
+    const item = offProductToFood({ ...data.product, code: data.code || q });
+    return item ? [item] : [];
   }
 
   async function searchUSDA(q) {
     if (/^\d{8,14}$/.test(q)) return [];
     const params = new URLSearchParams({
-      api_key: 'DEMO_KEY',
+      api_key: getUsdaKey(),
       query: q,
-      pageSize: '6',
-      dataType: 'Foundation,SR Legacy,Survey (FNDDS),Branded'
+      pageSize: '12'
     });
-    const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params.toString()}`);
-    if (!res.ok) throw new Error(`USDA ${res.status}`);
-    const data = await res.json();
-    return (data?.foods || []).map(usdaFoodToFood).filter(Boolean).slice(0, 6);
+    let res;
+    try {
+      res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params.toString()}`, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' }
+      });
+    } catch (e) {
+      throw searchError('USDA', 0, e?.message);
+    }
+    if (!res.ok) throw searchError('USDA', res.status);
+    let data;
+    try { data = await res.json(); }
+    catch { throw searchError('USDA', res.status, 'USDA returned invalid data'); }
+    return (data?.foods || []).map(usdaFoodToFood).filter(Boolean).slice(0, 10);
   }
 
   function dedupe(items) {
@@ -414,7 +543,7 @@
   function render(items, warnings = []) {
     current = items;
     if (!items.length) {
-      results.innerHTML = '<div class="empty-copy">No usable online nutrition result found. Try the brand name, a more specific food name, or the barcode.</div>';
+      results.innerHTML = '<div class="empty-copy">No usable online nutrition result found. Try a simpler food name (for example “grapes” or “chicken breast”). For packaged foods, a barcode lookup can be more accurate.</div>';
     } else {
       results.innerHTML = items.map((f, i) => `
         <div class="food-result">
@@ -467,10 +596,11 @@
     btn.disabled = true;
     btn.textContent = 'Searching online…';
     status.style.display = 'block';
-    status.textContent = 'Checking Open Food Facts and USDA FoodData Central…';
+    status.textContent = /^\d{8,14}$/.test(q) ? 'Looking up barcode in Open Food Facts…' : 'Searching USDA FoodData Central…';
     results.innerHTML = '';
 
     const warnings = [];
+    const barcode = /^\d{8,14}$/.test(q);
     const [off, usda] = await Promise.allSettled([
       searchOpenFoodFacts(q),
       searchUSDA(q)
@@ -478,9 +608,9 @@
 
     const items = [];
     if (off.status === 'fulfilled') items.push(...off.value);
-    else warnings.push('Open Food Facts unavailable');
+    else if (barcode) warnings.push(formatSearchError(off.reason, 'Open Food Facts'));
     if (usda.status === 'fulfilled') items.push(...usda.value);
-    else if (!/^\d{8,14}$/.test(q)) warnings.push('USDA unavailable or demo limit reached');
+    else if (!barcode) warnings.push(formatSearchError(usda.reason, 'USDA'));
 
     render(dedupe(items).slice(0, 10), warnings);
     btn.disabled = false;
